@@ -44,18 +44,45 @@
 
 		<h2>Overview</h2>
 		<p>
-			This homework covers two ways of representing smooth surfaces. In Section I, I evaluated Bezier curves and Bezier surface patches with de Casteljau's algorithm,
-			which builds every point on a curve out of repeated linear interpolation, and extends to surfaces by applying the 1D algorithm first along the rows of control points and then across them.
-			In Section II, I worked with triangle meshes stored in a half-edge data structure. I computed area-weighted vertex normals for smooth shading, implemented the two local operations
-			that change a mesh's connectivity, edge flip and edge split, and combined them into Loop subdivision, which turns a coarse mesh into a finer and smoother one.
+			This homework covers two ways of representing smooth surfaces: parametric Bezier curves and surfaces, and triangle meshes.
 		</p>
-		<p>
-			The most interesting lesson for me was how unforgiving the half-edge structure is. Every element points at its neighbors, so a flip or a split is only correct if <i>every</i> pointer
-			of <i>every</i> affected element is updated, and a single stale pointer often looks fine on screen and only breaks something much later. Drawing the before and after diagrams,
-			writing out a table of all the pointers, and checking simple invariants (such as <code>h-&gt;twin()-&gt;twin() == h</code>) turned the edge operations from guesswork into bookkeeping.
-			Loop subdivision was also a good lesson in how much a mesh's connectivity matters, not just its vertex positions: the same cube subdivides lopsided or perfectly symmetric
-			depending only on how its faces are triangulated.
-		</p>
+		<p><b>What I built</b></p>
+		<ul>
+			<li><b>Section I, Bezier curves and surfaces (Parts 1&ndash;2).</b> I evaluated Bezier curves with de Casteljau's algorithm, which builds every point on the curve out of repeated
+				linear interpolation, and extended it to bicubic Bezier patches by running the 1D algorithm along each row of control points and then once more across the results.</li>
+			<li><b>Section II, triangle meshes (Parts 3&ndash;6).</b> Working with a half-edge data structure, I computed area-weighted vertex normals for smooth shading,
+				implemented the two local operations that change a mesh's connectivity, edge flip and edge split, and combined them into Loop subdivision, which turns a coarse mesh
+				into a finer and smoother one.</li>
+		</ul>
+
+		<p><b>What I learned</b></p>
+		<ul>
+			<li><b>One cross product gives both a triangle's normal and its area.</b> Its direction is the normal, and its length is twice the area, so summing raw cross products already gives an area-weighted normal.</li>
+			<li><b>The half-edge structure is unforgiving.</b> Every element points at its neighbors, so a flip or a split is only correct if <i>every</i> pointer of <i>every</i> affected element is updated.
+				A stale pointer often looks fine on screen and only breaks something much later. Drawing before and after diagrams, writing out a table of all the pointers, and setting every
+				entry, including the ones that do not change, turned the edge operations from guesswork into bookkeeping.</li>
+			<li><b>Simple invariants catch bugs that the viewer cannot.</b> Checks such as <code>h-&gt;twin()-&gt;twin() == h</code>, "every halfedge in a face points at that face",
+				and "one round of subdivision gives exactly \(V + E\) vertices" found problems that were invisible on screen.</li>
+			<li><b>Connectivity matters as much as positions.</b> Loop subdivision is an approximating scheme, so it smooths and shrinks the mesh and rounds off sharp corners. It also depends on how the
+				surface is triangulated: the same cube subdivides lopsided or perfectly symmetric depending only on which diagonals split its faces.</li>
+		</ul>
+
+		<p><b>Problems I ran into</b></p>
+		<ul>
+			<li><b>Loops that never advanced.</b> My first walk around a vertex in Part 3 never moved to the next halfedge. When I then skipped boundary faces with <code>continue</code>,
+				it jumped straight to the <code>do</code>/<code>while</code> condition and skipped the advance again, which either ended the walk early or looped forever.</li>
+			<li><b>Halfedge direction.</b> A halfedge's <code>vertex()</code> is where it <i>starts</i>. Reading it as the end vertex gave me the wrong vertex in my first edge flip.</li>
+			<li><b>Incomplete pointer updates.</b> My first edge flip updated only the pointers I expected to change. It missed two <code>next()</code> pointers, the faces of two halfedges,
+				and the halfedges stored by the faces and vertices. The face pointers were the hardest to find, because the flip still looked correct in the viewer.</li>
+			<li><b>Shortcuts that break the rules.</b> For edge split, I first wanted to move an existing vertex to the midpoint instead of creating a new one. But that vertex is shared with
+				other triangles, so the shortcut would have required walking around it, which is not constant time. I also learned that default-constructed iterators such as
+				<code>VertexIter()</code> point to nothing; new elements must be allocated with <code>newVertex()</code> and the related functions.</li>
+			<li><b>What a flag really means.</b> In Loop subdivision I used <code>!isNew</code> to mean "an edge of the original mesh", but the halves of a split edge are new edges with
+				<code>isNew == false</code>, so the split loop never ended. <code>Edge::isNew</code> actually means "cuts across an original triangle", which is what the flipping step needs, so the
+				split step needed its own stopping rule: only split edges whose two endpoints are original vertices.</li>
+			<li><b>Smaller issues.</b> A C++ variable declared inside an <code>if</code> block no longer exists after the block. And the <code>isNew</code> flags keep their values from earlier operations:
+				every midpoint created in one round of subdivision is still marked new in the next round, so each round has to reset the flags before reading them.</li>
+		</ul>
 
 		<h2>Section I: Bezier Curves and Surfaces</h2>
 
